@@ -1,18 +1,43 @@
 #!/usr/bin/python
+# -------------------------------------------------------------------
+# $Id$
+#
+# Script to update the glossifier database with the glossary terms
+# from the CDR server
+# -------------------------------------------------------------------
+import urllib2, sys, cdrutil
 
-import urllib2, MySQLdb, sys, util
+#----------------------------------------------------------------------
+# Initialize logging.
+#----------------------------------------------------------------------
+program = "GetGlossifierTerms.py"
+logfile = "/weblogs/glossifier/glossifier.log"
+cdrutil.log("Starting %s" % program, logfile=logfile)
 
-if len(sys.argv) < 2:
-    sys.stderr.write("usage: %s host-name\n" % sys.argv[0])
-    sys.exit(1)
-
-host = sys.argv[1]
-conn = MySQLdb.connect(user = 'glossifier', passwd = '***REMOVED***',
-                       db = 'glossifier')
+#----------------------------------------------------------------------
+# Connect to the glossifier database.
+#----------------------------------------------------------------------
+try:
+    conn = cdrutil.getConnection("glossifier")
+except:
+    cdrutil.log("*** Unable to connect to glossifier DB", logfile=logfile)
+    raise
 cursor = conn.cursor()
-app = len(sys.argv) < 3 and 'cgi-bin/cdr/GetGlossifierTerms.py' or sys.argv[2]
-reader = urllib2.urlopen("http://%s/%s" % (host, app))
+
+#----------------------------------------------------------------------
+# Load the terms from the CDR server.
+#----------------------------------------------------------------------
+env = cdrutil.getEnvironment()
+tier = cdrutil.getTier()
+hosts = cdrutil.AppHost(env, tier)
+ssl = env == "CBIIT" and "Y" or "N"
+url = hosts.makeCdrCgiUrl(tier, program, ssl)
+reader = urllib2.urlopen(url)
 doc = reader.read()
+
+#----------------------------------------------------------------------
+# Store the terms in the glossifier database.
+#----------------------------------------------------------------------
 cursor.execute("""\
     UPDATE terms
        SET loaded = NOW(),
@@ -20,4 +45,5 @@ cursor.execute("""\
      WHERE terms_id = 1""", doc)
 cursor.execute("DELETE FROM term_regex")
 conn.commit()
-util.log("loaded glossifier terms (length %d bytes)" % len(doc))
+cdrutil.log("loaded glossifier terms (length %d bytes)" % len(doc),
+            logfile=logfile)
