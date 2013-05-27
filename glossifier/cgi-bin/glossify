@@ -3,14 +3,15 @@
 #
 # $Id$
 #
-# Service for Cancer.gov (task #4001).
+# Service for Cancer.gov (task #4001).  For documentation on behavior,
+# refer to the WSDL document (glossifier.xml).
 #
 # BZIssue::4001
 # BZIssue::4701
 #
 #----------------------------------------------------------------------
 
-import sys, xml.dom.minidom, WebService, time, re, MySQLdb, cgi, cdrutil
+import sys, WebService, time, re, cgi, cdrutil, os
 
 LOG_LEVEL  = 1
 STANDALONE = False
@@ -73,19 +74,7 @@ def buildRegex(names, languages, dictionaries):
     return u"(?<!\\w)(%s)(?!\\w)" % regexNames
 
 def loadNames():
-    if cdrutil.getEnvironment() == 'CBIIT':
-        h = cdrutil.AppHost(cdrutil.getEnvironment(), cdrutil.getTier(),
-                            filename = '/etc/cdrapphosts.rc')
-        conn = MySQLdb.connect(user = 'glossifier',
-                               host = h.host['DBNIX'][0], #'***REMOVED***-d',
-                               port = 3600,
-                               passwd = '***REMOVED***',
-                               db = 'glossifier')
-    else:
-        conn = MySQLdb.connect(user = 'glossifier',
-                               passwd = '***REMOVED***',
-                               db = 'glossifier')
-
+    conn = cdrutil.getConnection("glossifier")
     cursor = conn.cursor()
     cursor.execute("SELECT terms_dict FROM terms")
     return eval(cursor.fetchall()[0][0].strip())
@@ -236,6 +225,11 @@ def main():
             fp = open('glossifier.xml')
             doc = fp.read()
             fp.close()
+            try:
+                httpHost = os.environ["HTTP_HOST"]
+            except:
+                httpHost = "glossifier.cancer.gov"
+            doc = doc.replace("@@HOST_NAME@@", httpHost)
             response = WebService.Response(doc)
             response.send()
     try:
