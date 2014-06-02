@@ -18,15 +18,14 @@ ROLES = {
     "APPWEB": 443,
     "DBNIX": 3600,
     "GLOSSIFIER": 22,
-    "GLOSSIFIERC": 443,
-    "GLOSSIFIERWEB": 443,
+    "GLOSSIFIERC": 80,
+    "GLOSSIFIERWEB": 80,
     "GLOSSIFIERDB": 3600
 }
 
 DATABASES = {
     "dropbox": ("dropbox",),
     "glossifier": ("glossifier",),
-    "emailers": ("emailers",),
 }
 def db_account_ok(db, account):
     try:
