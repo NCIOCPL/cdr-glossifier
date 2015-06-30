@@ -16,11 +16,11 @@ ROLES = {
     #"APP": 22,
     "APPC": 443,
     "APPWEB": 443,
-    "DBNIX": 3600,
+    "DBNIX": TIER in ("DEV", "QA") and 3631 or 3600,
     "GLOSSIFIER": 22,
     "GLOSSIFIERC": 80,
     "GLOSSIFIERWEB": 80,
-    "GLOSSIFIERDB": 3600
+    "EMAILERSDB": TIER in ("DEV", "QA") and 3631 or 3600
 }
 
 DATABASES = {
