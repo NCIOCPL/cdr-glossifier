@@ -1,8 +1,6 @@
 #!/usr/bin/python
 #----------------------------------------------------------------------
 #
-# $Id$
-#
 # Sanity check for CDR configuration files for a given CBIIT tier.
 #
 #----------------------------------------------------------------------
@@ -13,14 +11,12 @@ TIER = cdrutil.getTier()
 HOSTING = cdrutil.getEnvironment()
 APPHOST = cdrutil.AppHost(HOSTING, TIER)
 ROLES = {
-    #"APP": 22,
     "APPC": 443,
     "APPWEB": 443,
     "DBNIX": TIER in ("DEV", "QA") and 3631 or 3600,
     "GLOSSIFIER": 22,
     "GLOSSIFIERC": 80,
-    "GLOSSIFIERWEB": 80,
-    "EMAILERSDB": TIER in ("DEV", "QA") and 3631 or 3600
+    "GLOSSIFIERWEB": 80
 }
 
 DATABASES = {

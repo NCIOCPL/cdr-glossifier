@@ -1,7 +1,5 @@
 #!/usr/bin/python
 # -------------------------------------------------------------------
-# $Id$
-#
 # Script to update the glossifier database with the glossary terms
 # from the CDR server
 # -------------------------------------------------------------------

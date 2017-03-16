@@ -1,8 +1,6 @@
 #!/usr/bin/python
 #----------------------------------------------------------------------
 #
-# $Id$
-#
 # Service for Cancer.gov (task #4001).  For documentation on behavior,
 # refer to the WSDL document (glossifier.xml).
 #
