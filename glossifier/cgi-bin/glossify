@@ -9,34 +9,136 @@
 #
 #----------------------------------------------------------------------
 
-import sys, WebService, time, re, cgi, cdrutil, os
+from argparse import ArgumentParser
+import os
+import re
+from lxml import etree
+import cdr
+import cdrdb2 as cdrdb
+import WebService
 
-LOG_LEVEL  = 1
-STANDALONE = False
+class Request:
+    logger = cdr.Logging.get_logger("glossifier")
+    WSDL = "d:/cdr/glossifier/cgi-bin/glossifier.xml"
+    CONTENT_TYPE = "text/xml"
+    SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/"
+    CDR_MAP = { None: cdr.NAMESPACE }
+    RESPONSE = "{%s}glossifyResponse" % cdr.NAMESPACE
+    RESULT = "{%s}glossifyResult" % cdr.NAMESPACE
+    MASK_PATTERNS = (
+        u"(?s)<!--.*?-->",
+        u"(?isu)<a\\s[^>]+>.*?</a>|{{.*?}}",
+        u"<[^>]*>"
+    )
 
-def debugWrite(what, logLevel = 1):
-    if logLevel <= LOG_LEVEL:
-        try:
-            if cdrutil.getEnvironment() == 'CBIIT':
-                logFile = open('/weblogs/glossifier/glossifier.log', 'a')
-            else:
-                logFile = open('/tmp/glossifier.log', 'a')
-            now     = time.strftime("%Y-%m-%d %H:%M:%S")
-            logFile.write("%s: %s\n" % (now, what))
-            logFile.close()
-        except:
-            if STANDALONE:
-                raise
+    def __init__(self, root):
+        self.fragment = u""
+        self.dictionaries = set()
+        self.languages = set()
+        self.names = self.load_names()
+        Request.logger.debug("loaded %d names", len(self.names))
+        self.regex = self.build_regex()
+        Request.logger.debug("regex=%r", self.regex)
+        nodes = root.findall("*/{%s}glossify/*" % cdr.NAMESPACE)
+        if not len(nodes):
+            # soapPy doesn't handle the namespace correctly.
+            nodes = root.findall("*/glossify/*")
+        if len(nodes):
+            self.fragment = cdr.get_text(nodes[0])
+            if len(nodes) > 1:
+                for child in nodes[1].findall("*"):
+                    dictionary = cdr.get_text(child).strip()
+                    if dictionary:
+                        self.dictionaries.add(dictionary)
+                if len(nodes) > 2:
+                    for child in nodes[2].findall("*"):
+                        language = cdr.get_text(child).strip()
+                        if language:
+                            self.languages.add(language)
+        self.doc = self.prep_doc(self.fragment)
+        self.logger.debug("fragment: %r", self.fragment)
+        self.logger.debug("languages: %r", self.languages)
+        self.logger.debug("dictionaries: %r", self.dictionaries)
 
-def getTextContent(node):
-    text = []
-    for child in node.childNodes:
-        if child.nodeType in (child.TEXT_NODE, child.CDATA_SECTION_NODE):
-            text.append(child.nodeValue)
-    return u"".join(text)
+    def glossify(self):
+        Request.logger.debug("glossify()")
+        matches = []
+        flags = re.UNICODE | re.IGNORECASE
+        for match in re.finditer(self.regex, self.doc, flags):
+            matches.append(self.Match(self.doc, match))
+        self.logger.info("found %d matching phrases", len(matches))
+        response = etree.Element(self.RESPONSE, nsmap=self.CDR_MAP)
+        result = etree.SubElement(response, self.RESULT)
+        for match in matches:
+            Request.logger.debug("processing %r", match.key)
+            terms = self.names.get(match.key)
+            if not terms:
+                self.logger.error("unable to find %r", match.key)
+                continue
+            for doc_id in terms:
+                term = terms[doc_id]
+                for lang in term:
+                    if self.languages and lang not in self.languages:
+                        continue
+                    dictionaries = term[lang]
+                    if not dictionaries and not self.dictionaries:
+                        result.append(match.term(doc_id, lang))
+                    elif self.dictionaries:
+                        for d in dictionaries:
+                            if d in self.dictionaries:
+                                result.append(match.term(doc_id, lang, d))
+        envelope = self.envelope()
+        body = self.body(envelope)
+        body.append(response)
+        return envelope
 
-def toRegex(name):
-    return (name
+    def build_regex(self):
+        name_set = set()
+        for name in self.names:
+            for doc_id in self.names[name]:
+                for language in self.names[name][doc_id]:
+                    if language in self.languages or not self.languages:
+                        if not self.dictionaries:
+                            name_set.add(name)
+                        else:
+                            dict_set = self.names[name][doc_id][language]
+                            if self.dictionaries.intersection(dict_set):
+                                name_set.add(name)
+        name_list = sorted(name_set, key=len, reverse=True)
+        regex_names = u"|".join([self.to_regex(n) for n in name_list])
+        return u"(?<!\\w)(%s)(?!\\w)" % regex_names
+
+    @classmethod
+    def prep_doc(cls, doc):
+        for pattern in cls.MASK_PATTERNS:
+            doc = re.sub(pattern, Request.mask, doc)
+        return doc
+
+    @classmethod
+    def fault_response(cls, agent, message):
+        envelope = cls.envelope()
+        body = cls.body(envelope)
+        fault = cls.fault(body)
+        etree.SubElement(fault, "faultcode").text = u"soap:%s" % agent
+        etree.SubElement(fault, "faultstring").text = unicode(message)
+        return envelope
+
+    @classmethod
+    def envelope(cls):
+        soap_map = { "soap": cls.SOAP_NS }
+        return etree.Element("{%s}Envelope" % cls.SOAP_NS, nsmap=soap_map)
+
+    @classmethod
+    def body(cls, envelope):
+        return etree.SubElement(envelope, "{%s}Body" % cls.SOAP_NS)
+
+    @classmethod
+    def fault(cls, body):
+        return etree.SubElement(body, "{%s}Fault" % cls.SOAP_NS)
+
+    @classmethod
+    def to_regex(cls, name):
+        return (name
             .replace(u"\\", ur"\\")
             .replace(u"+",  ur"\+")
             .replace(u" ",  ur"\s+")
@@ -54,204 +156,97 @@ def toRegex(name):
             .replace(u"'",  ur"['\u2019]")
             .replace(u")",  ur"\)"))
 
-def buildRegex(names, languages, dictionaries):
-    nameSet = set()
-    for name in names:
-        for docId in names[name]:
-            for language in names[name][docId]:
-                if language in languages or not languages:
-                    if not dictionaries:
-                        nameSet.add(name)
-                    else:
-                        dictSet = names[name][docId][language]
-                        if dictionaries.intersection(dictSet):
-                            nameSet.add(name)
-    nameList = list(nameSet)
-    nameList.sort(lambda first, second: cmp(len(second), len(first)))
-    regexNames = u"|".join([toRegex(n) for n in nameList])
-    return u"(?<!\\w)(%s)(?!\\w)" % regexNames
+    @staticmethod
+    def mask(match):
+        return "|" * len(match.group(0))
 
-def loadNames():
-    conn = cdrutil.getConnection("glossifier")
-    cursor = conn.cursor()
-    cursor.execute("SELECT terms_dict FROM terms")
-    return eval(cursor.fetchall()[0][0].strip())
+    @staticmethod
+    def load_names():
+        query = cdrdb.Query("glossifier", "terms").where("pk = 1")
+        return eval(query.execute().fetchone()[0].strip())
 
-whitespace = re.compile(u"\\s+", re.UNICODE)
-def normalize(name):
-    return whitespace.sub(" ", name).replace(u"\u2019", "'").lower()
+    class Match:
+        WHITESPACE = re.compile(u"\\s+", re.UNICODE)
+        TERM = "{%s}Term" % cdr.NAMESPACE
+        START = "{%s}start" % cdr.NAMESPACE
+        LENGTH = "{%s}length" % cdr.NAMESPACE
+        DOC_ID = "{%s}docId" % cdr.NAMESPACE
+        DICTIONARY = "{%s}dictionary" % cdr.NAMESPACE
+        LANGUAGE = "{%s}language" % cdr.NAMESPACE
+        FIRST_OCC = "{%s}firstOccurrence" % cdr.NAMESPACE
+        seen = set()
+        def __init__(self, doc, match):
+            self.start = match.start()
+            self.end = match.end()
+            self.word = doc[self.start:self.end]
+            self.length = self.end - self.start
+            self.key = self.normalize(self.word)
+            self.first_occurrence = self.key not in self.seen
+            self.seen.add(self.key)
+            Request.logger.debug("match for %r" % self.key)
+        def term(self, doc_id, language, dictionary=None):
+            first_occurrence = str(self.first_occurrence).lower()
+            term = etree.Element(self.TERM)
+            etree.SubElement(term, self.START).text = str(self.start)
+            etree.SubElement(term, self.LENGTH).text = str(self.length)
+            etree.SubElement(term, self.DOC_ID).text = "CDR%010d" % doc_id
+            if dictionary is not None:
+                etree.SubElement(term, self.DICTIONARY).text = dictionary
+            etree.SubElement(term, self.LANGUAGE).text = language
+            etree.SubElement(term, self.FIRST_OCC).text = first_occurrence
+            return term
 
-def maskMarkup(match):
-    return u"|" * len(match.group(0))
-
-def glossify(request, soapNS):
-    names = loadNames()
-    doc = re.sub(u"(?s)<!--.*?-->", maskMarkup, request.fragment)
-    doc = re.sub(u"(?isu)<a\\s[^>]+>.*?</a>|{{.*?}}", maskMarkup, doc)
-    doc = re.sub(u"<[^>]*>", maskMarkup, doc)
-    regex = buildRegex(names, request.languages, request.dictionaries)
-    seen = set()
-    matches = []
-    for m in re.finditer(regex, doc, re.UNICODE | re.IGNORECASE):
-        word = doc[m.start():m.end()]
-        matches.append((word, m.start(), m.end()))
-    response = [u"""\
-<?xml version='1.0' encoding='utf-8'?>
-<soap:Envelope xmlns:soap='%s'>
- <soap:Body>
-  <glossifyResponse xmlns='cips.nci.nih.gov/cdr'>
-   <glossifyResult>
-""" % soapNS]
-    for word, start, end in matches:
-        length = end - start
-        key = normalize(word)
-        if key in seen:
-            firstOccurrence = 'false'
-        else:
-            firstOccurrence = 'true'
-        seen.add(key)
-        terms = names.get(key)
-        if not terms:
-            debugWrite(u"can't find '%s'" % key)
-        else:
-            for docId in terms:
-                term = terms[docId]
-                for language in term:
-                    if request.languages and language not in request.languages:
-                        continue
-                    dictionaries = term[language]
-                    if not dictionaries and not request.dictionaries:
-                        response.append(u"""\
-    <Term>
-     <start>%d</start>
-     <length>%d</length>
-     <docId>CDR%010d</docId>
-     <language>%s</language>
-     <firstOccurrence>%s</firstOccurrence>
-    </Term>
-""" % (start, length, docId, language, firstOccurrence))
-                    else:
-                        for dictionary in dictionaries:
-                            if request.dictionaries:
-                                if dictionary not in request.dictionaries:
-                                    continue
-                            response.append(u"""\
-    <Term>
-     <start>%d</start>
-     <length>%d</length>
-     <docId>CDR%010d</docId>
-     <dictionary>%s</dictionary>
-     <language>%s</language>
-     <firstOccurrence>%s</firstOccurrence>
-    </Term>
-""" % (start, length, docId, dictionary, language, firstOccurrence))
-    response.append(u"""\
-   </glossifyResult>
-  </glossifyResponse>
- </soap:Body>
-</soap:Envelope>
-""")
-    return u"".join(response)
-
-class GlossifyRequest:
-    def __init__(self, documentElement):
-        self.fragment = ''
-        self.dictionaries = set()
-        self.languages = set()
-        parameterNodes = []
-        ns = 'cips.nci.nih.gov/cdr'
-        for node in documentElement.getElementsByTagNameNS(ns, 'glossify'):
-            for child in node.childNodes:
-                if child.nodeType == child.ELEMENT_NODE:
-                    parameterNodes.append(child)
-        if not parameterNodes:
-            # soapPy doesn't handle the namespace correctly.
-            for node in documentElement.getElementsByTagName('glossify'):
-                for child in node.childNodes:
-                    if child.nodeType == child.ELEMENT_NODE:
-                        parameterNodes.append(child)
-        if len(parameterNodes) >= 1:
-            self.fragment = getTextContent(parameterNodes[0])
-            if len(parameterNodes) >= 2:
-                for child in parameterNodes[1].childNodes:
-                    if child.nodeType == child.ELEMENT_NODE:
-                        dictionary = getTextContent(child).strip()
-                        if dictionary:
-                            self.dictionaries.add(dictionary)
-                if len(parameterNodes) >= 3:
-                    for child in parameterNodes[2].childNodes:
-                        if child.nodeType == child.ELEMENT_NODE:
-                            language = getTextContent(child).strip()
-                            if language:
-                                self.languages.add(language)
-
-def makeFaultResponse(soapNS, agent, message):
-    return WebService.Response(u"""\
-<?xml version='1.0' encoding='utf-8'?>
-<soap:Envelope xmlns:soap='%s'>
- <soap:Body>
-  <soap:Fault>
-   <faultcode>soap:%s</faultcode>
-   <faultstring>%s</faultstring>
-   <detail/>
-  </soap:Fault>
- </soap:Body>
-</soap:Envelope>
-""" % (soapNS, agent, message))
+        @classmethod
+        def normalize(cls, name):
+            return cls.WHITESPACE.sub(" ", name).replace(u"\u2019", "'").lower()
 
 def main():
-    global LOG_LEVEL
-    LOG_LEVEL = 1
-    global STANDALONE
-    if len(sys.argv) > 1 and sys.argv[1] == "--standalone":
-        STANDALONE = True
-    soapNS = 'http://schemas.xmlsoap.org/soap/envelope/'
-    contentType = 'text/xml'
+    parser = ArgumentParser()
+    parser.add_argument("--standalone", action="store_true")
+    parser.add_argument("--debug", action="store_true")
+    opts = parser.parse_args()
+    if opts.debug:
+        Request.logger.setLevel("DEBUG")
     try:
-        request = WebService.Request(STANDALONE, debugWrite)
-        LOG_LEVEL = request.logLevel
-        debugWrite("%s request from %s" % (request.type, request.client), 2)
-        debugWrite("Request body:\n%s" % request.message, 2)
-        if '/www.w3.org/2003/05/soap-envelope' in request.message.lower():
-            soapNS = 'http://www.w3.org/2003/05/soap-envelope'
-            contentType = 'application/soap+xml'
+        wsr = WebService.Request(opts.standalone, Request.logger)
+        if wsr.logLevel > 1:
+            Request.logger.setLevel("DEBUG")
+        Request.logger.info("%s request from %s", wsr.type, wsr.client)
+        Request.logger.debug("Request body:\n%s", wsr.message)
+        if "/www.w3.org/2003/05/soap-envelope" in wsr.message.lower():
+            Request.SOAP_NS = "http://www.w3.org/2003/05/soap-envelope"
+            Request.CONTENT_TYPE = "application/soap+xml"
     except Exception, e:
-        if STANDALONE:
-            debugWrite("Failure: %s" % e)
+        if opts.standalone:
+            Request.logger.exception("WebService.Request()")
             raise
-        else:
-            fp = open('glossifier.xml')
+        with open(Request.WSDL) as fp:
             doc = fp.read()
-            fp.close()
-            try:
-                httpHost = os.environ["HTTP_HOST"]
-            except:
-                httpHost = "glossifier.cancer.gov"
-            doc = doc.replace("@@HOST_NAME@@", httpHost)
-            response = WebService.Response(doc)
-            response.send()
-    try:
-        glossifyRequest = GlossifyRequest(request.doc)
         try:
-            debugWrite("doc: %s" % request.message)
+            http_host = os.environ["HTTP_HOST"]
         except:
-            pass
-        debugWrite("fragment: '%s..." % glossifyRequest.fragment)
-        debugWrite("languages: %s" % repr(glossifyRequest.languages))
-        debugWrite("dictionaries: %s" % repr(glossifyRequest.dictionaries))
+            http_host = "glossifier.cancer.gov"
+        doc = doc.replace("@@HOST_NAME@@", http_host)
+        response = WebService.Response(doc, Request.logger)
+        Request.logger.debug("sending back WSDL")
+        response.send()
+    try:
+        Request.logger.debug("message: %r", wsr.message)
+        request = Request(wsr.doc)
         try:
-            response = WebService.Response(glossify(glossifyRequest, soapNS))
+            response = WebService.Response(request.glossify())
         except Exception, e:
-            debugWrite("glossify(): %s" % e)
-            e = cgi.escape(u"%s" % e)
-            response = makeFaultResponse(soapNS, u"Server", e)
+            Request.logger.exception("glossify()")
+            response = Request.fault_response(u"Server", e)
     except Exception, e:
-        debugWrite("GlossifyRequest(): %s" % e)
-        e = cgi.escape(u"%s" % e)
-        response = makeFaultResponse(soapNS, u"Client", e)
-    debugWrite("Response body:\n%s" % response.body) #, 2)
-    response.send(contentType)
+        Request.logger.exception("Request()")
+        response = Request.fault_response(u"Client", e)
+    Request.logger.debug("Response body:\n%s", response.body)
+    response.send(Request.CONTENT_TYPE)
 
 if __name__ == '__main__':
-    main()
-
+    try:
+        main()
+    except Exception:
+        Request.logger.error("cwd: %s", os.getcwd())
+        Request.logger.exception("main()")
