@@ -7,3 +7,6 @@
 *.js     text eol=lf
 *.py     text eol=lf
 *.txt    text eol=lf
+
+.gitattributes export-ignore
+.gitignore     export-ignore
