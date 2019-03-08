@@ -46,7 +46,7 @@
           which are likely to match the patterns for certain HTML
           markup.  This masking is done in three passes, and any
           portion of the input fragment which is masked by an earlier
-          pass is ignore by subsequent masking passes when looking for
+          pass is ignored by subsequent masking passes when looking for
           these markup constructs.  The first pass masks out all
           substrings which look like HTML comments (everything
           beginning with "<!" followed by two hyphen characters up to
