@@ -14,7 +14,7 @@ import os
 import re
 from lxml import etree
 import cdr
-import cdrdb2 as cdrdb
+from cdrapi import db
 import WebService
 
 class Request:
@@ -26,13 +26,13 @@ class Request:
     RESPONSE = "{%s}glossifyResponse" % cdr.NAMESPACE
     RESULT = "{%s}glossifyResult" % cdr.NAMESPACE
     MASK_PATTERNS = (
-        u"(?s)<!--.*?-->",
-        u"(?isu)<a\\s[^>]+>.*?</a>|{{.*?}}",
-        u"<[^>]*>"
+        "(?s)<!--.*?-->",
+        "(?isu)<a\\s[^>]+>.*?</a>|{{.*?}}",
+        "<[^>]*>"
     )
 
     def __init__(self, root):
-        self.fragment = u""
+        self.fragment = ""
         self.dictionaries = set()
         self.languages = set()
         self.names = self.load_names()
@@ -105,8 +105,8 @@ class Request:
                             if self.dictionaries.intersection(dict_set):
                                 name_set.add(name)
         name_list = sorted(name_set, key=len, reverse=True)
-        regex_names = u"|".join([self.to_regex(n) for n in name_list])
-        return u"(?<!\\w)(%s)(?!\\w)" % regex_names
+        regex_names = "|".join([self.to_regex(n) for n in name_list])
+        return "(?<!\\w)(%s)(?!\\w)" % regex_names
 
     @classmethod
     def prep_doc(cls, doc):
@@ -119,8 +119,8 @@ class Request:
         envelope = cls.envelope()
         body = cls.body(envelope)
         fault = cls.fault(body)
-        etree.SubElement(fault, "faultcode").text = u"soap:%s" % agent
-        etree.SubElement(fault, "faultstring").text = unicode(message)
+        etree.SubElement(fault, "faultcode").text = "soap:%s" % agent
+        etree.SubElement(fault, "faultstring").text = str(message)
         return envelope
 
     @classmethod
@@ -139,22 +139,22 @@ class Request:
     @classmethod
     def to_regex(cls, name):
         return (name
-            .replace(u"\\", ur"\\")
-            .replace(u"+",  ur"\+")
-            .replace(u" ",  ur"\s+")
-            .replace(u".",  ur"\.")
-            .replace(u"^",  ur"\^")
-            .replace(u"$",  ur"\$")
-            .replace(u"*",  ur"\*")
-            .replace(u"?",  ur"\?")
-            .replace(u"{",  ur"\{")
-            .replace(u"}",  ur"\}")
-            .replace(u"[",  ur"\[")
-            .replace(u"]",  ur"\]")
-            .replace(u"|",  ur"\|")
-            .replace(u"(",  ur"\(")
-            .replace(u"'",  ur"['\u2019]")
-            .replace(u")",  ur"\)"))
+            .replace("\\", r"\\")
+            .replace("+",  r"\+")
+            .replace(" ",  r"\s+")
+            .replace(".",  r"\.")
+            .replace("^",  r"\^")
+            .replace("$",  r"\$")
+            .replace("*",  r"\*")
+            .replace("?",  r"\?")
+            .replace("{",  r"\{")
+            .replace("}",  r"\}")
+            .replace("[",  r"\[")
+            .replace("]",  r"\]")
+            .replace("|",  r"\|")
+            .replace("(",  r"\(")
+            .replace("'",  r"['\u2019]")
+            .replace(")",  r"\)"))
 
     @staticmethod
     def mask(match):
@@ -162,11 +162,11 @@ class Request:
 
     @staticmethod
     def load_names():
-        query = cdrdb.Query("glossifier", "terms").where("pk = 1")
+        query = db.Query("glossifier", "terms").where("pk = 1")
         return eval(query.execute().fetchone()[0].strip())
 
     class Match:
-        WHITESPACE = re.compile(u"\\s+", re.UNICODE)
+        WHITESPACE = re.compile("\\s+", re.UNICODE)
         TERM = "{%s}Term" % cdr.NAMESPACE
         START = "{%s}start" % cdr.NAMESPACE
         LENGTH = "{%s}length" % cdr.NAMESPACE
@@ -198,7 +198,7 @@ class Request:
 
         @classmethod
         def normalize(cls, name):
-            return cls.WHITESPACE.sub(" ", name).replace(u"\u2019", "'").lower()
+            return cls.WHITESPACE.sub(" ", name).replace("\u2019", "'").lower()
 
 def main():
     parser = ArgumentParser()
@@ -216,7 +216,7 @@ def main():
         if "/www.w3.org/2003/05/soap-envelope" in wsr.message.lower():
             Request.SOAP_NS = "http://www.w3.org/2003/05/soap-envelope"
             Request.CONTENT_TYPE = "application/soap+xml"
-    except Exception, e:
+    except Exception as e:
         if opts.standalone:
             Request.logger.exception("WebService.Request()")
             raise
@@ -235,12 +235,12 @@ def main():
         request = Request(wsr.doc)
         try:
             response = WebService.Response(request.glossify())
-        except Exception, e:
+        except Exception as e:
             Request.logger.exception("glossify()")
-            response = Request.fault_response(u"Server", e)
-    except Exception, e:
+            response = Request.fault_response("Server", e)
+    except Exception as e:
         Request.logger.exception("Request()")
-        response = Request.fault_response(u"Client", e)
+        response = Request.fault_response("Client", e)
     Request.logger.debug("Response body:\n%s", response.body)
     response.send(Request.CONTENT_TYPE)
 
