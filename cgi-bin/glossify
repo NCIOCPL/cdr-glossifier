@@ -38,9 +38,10 @@ class Request:
         self.names = self.load_names()
         Request.logger.debug("loaded %d names", len(self.names))
         self.regex = self.build_regex()
-        Request.logger.debug("regex=%r", self.regex)
+        #Request.logger.debug("regex=%r", self.regex)
         nodes = root.findall("*/{%s}glossify/*" % cdr.NAMESPACE)
         if not len(nodes):
+            Request.logger.warning("adjust for mishandled namespace")
             # soapPy doesn't handle the namespace correctly.
             nodes = root.findall("*/glossify/*")
         if len(nodes):
@@ -56,9 +57,9 @@ class Request:
                         if language:
                             self.languages.add(language)
         self.doc = self.prep_doc(self.fragment)
-        self.logger.debug("fragment: %r", self.fragment)
-        self.logger.debug("languages: %r", self.languages)
-        self.logger.debug("dictionaries: %r", self.dictionaries)
+        self.logger.debug("fragment: %s", self.fragment)
+        self.logger.debug("languages: %s", self.languages)
+        self.logger.debug("dictionaries: %s", self.dictionaries)
 
     def glossify(self):
         Request.logger.debug("glossify()")
@@ -70,10 +71,10 @@ class Request:
         response = etree.Element(self.RESPONSE, nsmap=self.CDR_MAP)
         result = etree.SubElement(response, self.RESULT)
         for match in matches:
-            Request.logger.debug("processing %r", match.key)
+            Request.logger.debug("processing %s", match.key)
             terms = self.names.get(match.key)
             if not terms:
-                self.logger.error("unable to find %r", match.key)
+                self.logger.error("unable to find %s", match.key)
                 continue
             for doc_id in terms:
                 term = terms[doc_id]
@@ -153,7 +154,7 @@ class Request:
             .replace("]",  r"\]")
             .replace("|",  r"\|")
             .replace("(",  r"\(")
-            .replace("'",  r"['\u2019]")
+            .replace("'",  "['\u2019]")
             .replace(")",  r"\)"))
 
     @staticmethod
@@ -183,7 +184,7 @@ class Request:
             self.key = self.normalize(self.word)
             self.first_occurrence = self.key not in self.seen
             self.seen.add(self.key)
-            Request.logger.debug("match for %r" % self.key)
+            Request.logger.debug("match for %s" % self.key)
         def term(self, doc_id, language, dictionary=None):
             first_occurrence = str(self.first_occurrence).lower()
             term = etree.Element(self.TERM)
@@ -200,6 +201,7 @@ class Request:
         def normalize(cls, name):
             return cls.WHITESPACE.sub(" ", name).replace("\u2019", "'").lower()
 
+
 def main():
     parser = ArgumentParser()
     parser.add_argument("--standalone", action="store_true")
@@ -212,10 +214,12 @@ def main():
         if wsr.logLevel > 1:
             Request.logger.setLevel("DEBUG")
         Request.logger.info("%s request from %s", wsr.type, wsr.client)
-        Request.logger.debug("Request body:\n%s", wsr.message)
-        if "/www.w3.org/2003/05/soap-envelope" in wsr.message.lower():
+        Request.logger.debug("Request body:\n%s", wsr.message_text)
+        if "/www.w3.org/2003/05/soap-envelope" in wsr.message_text.lower():
             Request.SOAP_NS = "http://www.w3.org/2003/05/soap-envelope"
             Request.CONTENT_TYPE = "application/soap+xml"
+            Request.logger.debug("SOAP_NS: %s", Request.SOAP_NS)
+            Request.logger.debug("CONTENT_TYPE: %s", Request.CONTENT_TYPE)
     except Exception as e:
         if opts.standalone:
             Request.logger.exception("WebService.Request()")
@@ -243,6 +247,7 @@ def main():
         response = Request.fault_response("Client", e)
     Request.logger.debug("Response body:\n%s", response.body)
     response.send(Request.CONTENT_TYPE)
+
 
 if __name__ == '__main__':
     try:
