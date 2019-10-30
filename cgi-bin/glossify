@@ -82,12 +82,18 @@ class Request:
                     if self.languages and lang not in self.languages:
                         continue
                     dictionaries = term[lang]
-                    if not dictionaries and not self.dictionaries:
-                        result.append(match.term(doc_id, lang))
-                    elif self.dictionaries:
+                    if self.dictionaries:
+                        if dictionaries:
+                            for d in dictionaries:
+                                if d in self.dictionaries:
+                                    result.append(match.term(doc_id, lang, d))
+                        else:
+                            result.append(match.term(doc_id, lang))
+                    elif dictionaries:
                         for d in dictionaries:
-                            if d in self.dictionaries:
-                                result.append(match.term(doc_id, lang, d))
+                            result.append(match.term(doc_id, lang, d))
+                    else:
+                        result.append(match.term(doc_id, lang))
         envelope = self.envelope()
         body = self.body(envelope)
         body.append(response)
