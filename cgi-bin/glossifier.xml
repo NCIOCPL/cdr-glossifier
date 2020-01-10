@@ -1,11 +1,11 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<w:definitions          xmlns:w = 'http://schemas.xmlsoap.org/wsdl/'
-                     xmlns:soap = 'http://schemas.xmlsoap.org/wsdl/soap/'
-                   xmlns:soap12 = 'http://schemas.xmlsoap.org/wsdl/soap12/'
-                        xmlns:s = 'http://www.w3.org/2001/XMLSchema'
-                     xmlns:http = 'http://schemas.xmlsoap.org/wsdl/http/'
-                          xmlns = 'cips.nci.nih.gov/cdr'
-                targetNamespace = 'cips.nci.nih.gov/cdr'>
+<?xml version="1.0"?>
+<w:definitions          xmlns:w = "http://schemas.xmlsoap.org/wsdl/"
+                     xmlns:soap = "http://schemas.xmlsoap.org/wsdl/soap/"
+                   xmlns:soap12 = "http://schemas.xmlsoap.org/wsdl/soap12/"
+                        xmlns:s = "http://www.w3.org/2001/XMLSchema"
+                     xmlns:http = "http://schemas.xmlsoap.org/wsdl/http/"
+                          xmlns = "cips.nci.nih.gov/cdr"
+                targetNamespace = "cips.nci.nih.gov/cdr">
 
  <!--
   ======================================================================
@@ -152,119 +152,119 @@
   ======================================================================
  -->
  <w:types>
-  <s:schema  elementFormDefault = 'qualified'
-                targetNamespace = 'cips.nci.nih.gov/cdr'>
-   <s:element              name = 'glossify'>
+  <s:schema  elementFormDefault = "qualified"
+                targetNamespace = "cips.nci.nih.gov/cdr">
+   <s:element              name = "glossify">
     <s:complexType>
      <s:sequence>
-      <s:element           name = 'fragment'
-                           type = 's:string'/>
-      <s:element           name = 'dictionaries'
-                           type = 'ArrayOfString'/>
-      <s:element           name = 'languages'
-                           type = 'ArrayOfString'/>
+      <s:element           name = "fragment"
+                           type = "s:string"/>
+      <s:element           name = "dictionaries"
+                           type = "ArrayOfString"/>
+      <s:element           name = "languages"
+                           type = "ArrayOfString"/>
      </s:sequence>
     </s:complexType>
    </s:element>
-   <s:complexType          name = 'ArrayOfString'>
+   <s:complexType          name = "ArrayOfString">
     <s:sequence>
-     <s:element            name = 'string'
-                           type = 's:string'
-                      minOccurs = '0'
-                      maxOccurs = 'unbounded'/>
+     <s:element            name = "string"
+                           type = "s:string"
+                      minOccurs = "0"
+                      maxOccurs = "unbounded"/>
     </s:sequence>
    </s:complexType>
-   <s:element              name = 'glossifyResponse'>
+   <s:element              name = "glossifyResponse">
     <s:complexType>
      <s:sequence>
-      <s:element           name = 'glossifyResult'
-                           type = 'ArrayOfTerm'/>
+      <s:element           name = "glossifyResult"
+                           type = "ArrayOfTerm"/>
      </s:sequence>
     </s:complexType>
    </s:element>
-   <s:complexType          name = 'ArrayOfTerm'>
+   <s:complexType          name = "ArrayOfTerm">
     <s:sequence>
-     <s:element            name = 'Term'
-                           type = 'Term'
-                      minOccurs = '0'
-                      maxOccurs = 'unbounded'/>
+     <s:element            name = "Term"
+                           type = "Term"
+                      minOccurs = "0"
+                      maxOccurs = "unbounded"/>
     </s:sequence>
    </s:complexType>
-   <s:complexType          name = 'Term'>
+   <s:complexType          name = "Term">
     <s:sequence>
-     <s:element            name = 'start'
-                           type = 's:int'/>
-     <s:element            name = 'length'
-                           type = 's:int'/>
-     <s:element            name = 'docId'
-                           type = 's:string'/>
-     <s:element            name = 'dictionary'
-                           type = 's:string'
-                      minOccurs = '0'/>
-     <s:element            name = 'language'
-                           type = 's:string'/>
-     <s:element            name = 'firstOccurrence'
-                           type = 's:boolean'/>
+     <s:element            name = "start"
+                           type = "s:int"/>
+     <s:element            name = "length"
+                           type = "s:int"/>
+     <s:element            name = "docId"
+                           type = "s:string"/>
+     <s:element            name = "dictionary"
+                           type = "s:string"
+                      minOccurs = "0"/>
+     <s:element            name = "language"
+                           type = "s:string"/>
+     <s:element            name = "firstOccurrence"
+                           type = "s:boolean"/>
     </s:sequence>
    </s:complexType>
   </s:schema>
  </w:types>
 
  <!-- Request/response messages exchanged for Glossifier service. -->
- <w:message                name = 'glossifySoapIn'>
-  <w:part                  name = 'parameters'
-                        element = 'glossify'/>
+ <w:message                name = "glossifySoapIn">
+  <w:part                  name = "parameters"
+                        element = "glossify"/>
  </w:message>
- <w:message                name = 'glossifySoapOut'>
-  <w:part                  name = 'parameters'
-                        element = 'glossifyResponse'/>
+ <w:message                name = "glossifySoapOut">
+  <w:part                  name = "parameters"
+                        element = "glossifyResponse"/>
  </w:message>
 
  <!-- Service bindings (SOAP 1.1 and 1.2 supported). -->
- <w:portType               name = 'GlossifierSoap'>
-  <w:operation             name = 'glossify'>
-   <w:input             message = 'glossifySoapIn'/>
-   <w:output            message = 'glossifySoapOut'/>
+ <w:portType               name = "GlossifierSoap">
+  <w:operation             name = "glossify">
+   <w:input             message = "glossifySoapIn"/>
+   <w:output            message = "glossifySoapOut"/>
   </w:operation>
  </w:portType>
- <w:binding                name = 'GlossifierSoap'
-                           type = 'GlossifierSoap'>
-  <soap:binding       transport = 'http://schemas.xmlsoap.org/soap/http'/>
-  <w:operation             name = 'glossify'>
-   <soap:operation   soapAction = 'cips.nci.nih.gov/cdr/glossify'
-                          style = 'document'/>
+ <w:binding                name = "GlossifierSoap"
+                           type = "GlossifierSoap">
+  <soap:binding       transport = "http://schemas.xmlsoap.org/soap/http"/>
+  <w:operation             name = "glossify">
+   <soap:operation   soapAction = "cips.nci.nih.gov/cdr/glossify"
+                          style = "document"/>
    <w:input>
-    <soap:body              use = 'literal'/>
+    <soap:body              use = "literal"/>
    </w:input>
    <w:output>
-    <soap:body              use = 'literal'/>
+    <soap:body              use = "literal"/>
    </w:output>
   </w:operation>
  </w:binding>
- <w:binding                name = 'GlossifierSoap12'
-                           type = 'GlossifierSoap'>
-  <soap12:binding     transport = 'http://schemas.xmlsoap.org/soap/http'/>
-  <w:operation             name = 'glossify'>
-   <soap12:operation soapAction = 'cips.nci.nih.gov/cdr/glossify'
-                          style = 'document'/>
+ <w:binding                name = "GlossifierSoap12"
+                           type = "GlossifierSoap">
+  <soap12:binding     transport = "http://schemas.xmlsoap.org/soap/http"/>
+  <w:operation             name = "glossify">
+   <soap12:operation soapAction = "cips.nci.nih.gov/cdr/glossify"
+                          style = "document"/>
    <w:input>
-    <soap12:body            use = 'literal'/>
+    <soap12:body            use = "literal"/>
    </w:input>
    <w:output>
-    <soap12:body            use = 'literal'/>
+    <soap12:body            use = "literal"/>
    </w:output>
   </w:operation>
  </w:binding>
 
  <!-- Where the service can be invoked. -->
- <w:service                name = 'Glossifier'>
-  <w:port                  name = 'GlossifierSoap'
-                        binding = 'GlossifierSoap'>
-   <soap:address       location = 'http://@@HOST_NAME@@/cgi-bin/glossify'/>
+ <w:service                name = "Glossifier">
+  <w:port                  name = "GlossifierSoap"
+                        binding = "GlossifierSoap">
+   <soap:address       location = "http://@@HOST_NAME@@/cgi-bin/glossify"/>
   </w:port>
-  <w:port                  name = 'GlossifierSoap12'
-                        binding = 'GlossifierSoap12'>
-   <soap:address       location = 'http://@@HOST_NAME@@/cgi-bin/glossify'/>
+  <w:port                  name = "GlossifierSoap12"
+                        binding = "GlossifierSoap12">
+   <soap:address       location = "http://@@HOST_NAME@@/cgi-bin/glossify"/>
   </w:port>
  </w:service>
 
